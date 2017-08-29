@@ -2,6 +2,8 @@
 
     准备学习ABP框架,看源码的时候,发现代码中到处都用到依赖注入(DI)技术,我原来的项目由于使用的都是Autofac,所以准备花点时间来系统的学习 Castle 框架使用
 
+译文[https://github.com/castleproject/Windsor/blob/master/docs/registering-components-one-by-one.md#type-forwarding]
+
 ## Castle 使用
 
 1. 安装Castle Windsor
@@ -138,8 +140,88 @@
         Component.For<IMyFactory>()
                     .UsingFactoryMethod(kernel=>kernel.Resolve<IMyfacory>().Create())
     );
+
 ```
 
-[https://github.com/castleproject/Windsor/blob/master/docs/registering-components-one-by-one.md#type-forwarding]
+除了```UsingFactoryMethod```方法,还有一个```UsingFactory```(不需要```method```后缀),它能视为特殊版本的```UsingFactoryMethod```方法,用于从container中解析已经存在的的工厂和让你在服务中创建实例。
+
+避免使用```UsingFacotry```：建议使用```UsingFactoryMethod```,在你穿件服务的时候避免```UsingFactory```，```UsingFactory```在将来的发布版本中会被过期/删除.
 
 
+## OnCreate
+
+有事需要检查或者修改创建的实例，在用之前,你可以使用```OnCreate```方法去处理
+
+```
+    container.Register(
+        Component.For<IServcie>().ImplementedBy<MyService>()
+            .OnCreate(kernel,instance)=>instance.Name+="a")
+    );
+```
+这个方法有两个重载,一个工作配合委托，有两个实例IKernel和新创建的实例,另外一个
+只有一个新创建的实例.
+
+```OnCreate```只有工作在container创建组件中:这个方法不会被触发在外部提供实例(像用实例方法时).只有在容器创建组件的时候才会被触发.这当然包含某些工具穿件组件时.
+
+## 给组件指定一个名字
+
+注册组件默认的名字是类型实例类型的全名,你可以用```Named()```方法制定一个不同的名称.
+```
+    container.Register(
+        Component.For<IService>().ImplementedBy<MyServiceImpl>()
+                    .Named("mservice.default")
+    );
+```
+
+## 向组件提供使用依赖(服务重写)
+
+如果一个组件需要或者想要其他组件的功能,这叫依赖.在注册时,使用服务重写你可以明确的设置.
+
+```
+    container.Register(
+        Component.For<IMyService>()
+            .ImplementedBy<MyService>()
+            .Named("myservice.default),
+        Component.For<IMyService>()
+            .ImplementedBy<OtherService>()
+            .Named("myservice.other),
+        Component.For<ProductController>()
+            .ServiceOverrides(
+                ServiceOverride.ForKey("myService").Eq("myservice.other")
+            )
+    );
+
+    public class ProductController
+    {
+        public ProductController(IMyservice myService){
+
+        }
+    }
+```
+
+## 使用多个服务注册组件
+
+一个组件有多个服务是有可能的.比如如果你有一个类```FooBar```实现```IFoo```和```IBar```接口,你可以配置你的容器,当```IFoo```和```IBar```需要的时候,返回同样的服务,这种能力叫类型转发.
+
+## 类型转发
+
+使用```Component.For```的泛型重载方法,可以很简单的实现指定类型转发
+```
+    container.Register(
+        Component.For<IUserRepository,IRepository>()
+            .ImplementedBy<MyRepository>()
+    );
+```
+上面可以最高重载四种类型转发服务,这个已经够了.如果你发现自己需要更多,你很坑你违反了单一职责原则,你可能需要将巨型组件分解更多的组件,每个组件只做一件事.
+
+上面当然还有一个非泛型重载.
+
+更多,你可以哦那个```ForWard```方法,
+
+```
+    container.Register(
+        Component.For<IUserRepository>()
+            .ForWard<IRepository,IRepository<User>>()
+            .ImplementedBy<MyRepository>()
+    );
+```
