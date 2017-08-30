@@ -78,5 +78,188 @@
 
 ## 默认服务
 
+记住其他筛选只是只是缩小了我们要注册的程序集，它们没有指定服务,会使用缺省值.
 
+## 给组件选择服务
+
+默认的服务是组件类型本身，有几种情况是不够的.Windsor需要你指定清晰的类型.
+
+### Base()
+```
+    container.Register(
+        Classes.FromThisAssembly()
+            .BasedOn(typeof(ICommand<>)).WithService.Base(),
+        Classes.FromThisAssembly()
+            .BasedOn(typeof(IValidator<>)).WithService.Base()
+    )
+```
+
+### DefaultInterfaces()
+
+这个方法在Windsor 3中改名为从`DefaultInterface`,他强调可以匹配更多的不仅仅是一个组件.
+
+```
+    container.Register(
+        Classes.FromThisAssembly()
+            .InNamespace("Acme.Crm.Services")
+            .WithService.DefaultInterfaces()
+    );
+```
+
+这个方法执行匹配依据类型名称和接口名称.通常你会发现你接口/具体的匹配像这样:`ICustomerRepository/CustomerRepository`, `IMessageSender/SmsMessageSender`, `INotificationService/DefaultNotificationService`,这种状况是你可能想要使用DefaultInterfaces方法去匹配服务.它将查看选定类型实现的所有接口，并将其用作具有匹配名称的类型的服务。匹配名称，意味着实现类在其名称中包含接口的名称（没有前面的i）。
+
+### FromInterface()
+
+另一个非常常见的场景是能够注册共享公共接口的所有类型，但它们之间没有关系。
+
+```
+    container.Register(
+        Classes.FromThisAssembly()
+            .BasedOn<IService>()
+            .WithService.FromInterface()
+    );
+```
+
+这里我们从正在执行的程序集注册服务类。在这种情况下，IService接口可能是一个标记接口识别系统中的一个组成部分的作用。不同的服务。不像```WithService.Base()```，选定此注册服务类型是从接口，扩展服务选择。下面是一个例子来帮助说明这一点。
+下面是一个例子来帮助说明这一点。
+
+可以说你有一个标记接口服务在您指定的所有服务组件。
+
+```
+    public interface IService {}
+
+    public interface ICalculatorService : IService
+    {
+        float Add(float op1, float op2);
+    }
+
+    public class CalculatorService : ICalculatorService
+    {
+        public float Add(float op1, float op2)
+        {
+            return op1 + op2;
+        }
+    }
+```
+上面的例子等同于
+
+```
+    container.Register(
+        Component.For<ICalculatorService>()
+            .ImplementedBy<CalculatorService>()
+    );
+```
+你可以看到，实际的服务接口是不是IService，而是扩展接口IService，这是在这种情况下ICalculatorService.
+
+### AllInterfaces()
+
+当一个组件实现多个接口并且你想他们都实现它,用 `WidthService.AllInterfaces()方法.
+
+### Self()
+
+注册组件实现类型明确作为服务使用self()服务。
+
+### Select()
+
+如果以上选项不适合您可以提供您自己的选择逻辑为代表，通过它的委托可以通过Select()方法
+
+服务可是累积:可以多次使用WidthService.Something()并且可以累加,意味着:
+```
+    container.Register(
+        Classes.FromThisAssembly()
+            .BasedOn<IFoo>()
+            .WithService.Self()
+            .WithService.Base()
+    );
+```
+
+上面的写法等同于：
+
+```
+    Component.For<IFoo, FooImpl>().ImplementedBy<FooImpl>();
+```
+
+## 注册非公共类型
+
+默认情况下，只能从程序集外部可见的类型将被注册。如果你想包括非公有制类型，你必须从指定的组件，然后调用IncludeNonPublicTypes
+
+```
+    container.Register(
+        Classes.FromThisAssembly()
+            .IncludeNonPublicTypes()
+            .BasedOn<NonPublicComponent>()
+    );
+```
+
+注意:尽量不要用该方法.
+
+## 配置注册
+
+### Configure 方法
+
+注册类型时，还可以配置它们来设置与注册类型一个接一个时的所有相同属性。为此，您使用配置方法。最常见的情况是为您的组件分配一种生活方式，而不是默认的单例。
+
+```
+    container.Register(
+        Classes.FromAssembly(Assembly.GetExecutingAssembly())
+            .BasedOn<ICommon>()
+            .Configure(component => component.LifestyleTransient())
+    );
+
+    //windsor 3 above
+    container.Register(
+        Classes.FromAssembly(Assembly.GetExecutingAssembly())
+            .BasedOn<ICommon>()
+            .LifestyleTransient()
+    );
+```
+
+除了指定生活方式之外，还可以设置许多其他配置选项：
+
+```
+    container.Register(
+        Classes.FromAssembly(Assembly.GetExecutingAssembly())
+            .BasedOn<ICommon>()
+            .LifestyleTransient()
+            .Configure(component => component.Named(component.Implementation.FullName + "XYZ"))
+    );
+```
+
+在我们这里注册了实现ICommon，设置了他的生命周期和名称
+
+### ConfigureFor<T> method
+
+```
+    container.Register(
+        Classes.FromThisAssembly()
+            .BasedOn<ICommon>()
+            .LifestyleTransient()
+            .Configure(
+                component => component.Named(component.Implementation.FullName + "XYZ")
+            )
+            .ConfigureFor<CommonImpl1>(
+                component => component.DependsOn(Property.ForKey("key1").Eq(1))
+            )
+            .ConfigureFor<CommonImpl2>(
+                component => component.DependsOn(Property.ForKey("key2").Eq(2))
+            )
+    );
+```
+
+### ConfigureIf method
+
+```
+    container.Register(
+        Classes.FromThisAssembly()
+            .BasedOn<ICommon>()
+            .LifestyleTransient()
+            .Configure(
+                component => component.Named(component.Implementation.FullName + "XYZ")
+            )
+            .ConfigureIf(
+                x => x.Implementation.Name.StarsWith("Common"),
+                component => component.DependsOn(Property.ForKey("key1").Eq(1))
+            )
+    );
+```
 
