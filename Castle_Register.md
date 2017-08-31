@@ -216,7 +216,7 @@
 
 上面当然还有一个非泛型重载.
 
-更多,你可以哦那个```ForWard```方法,
+更多,你可以哦那个```ForWard```方法,他会暴露相同行为和重载```For```方法.
 
 ```
     container.Register(
@@ -225,3 +225,4 @@
             .ImplementedBy<MyRepository>()
     );
 ```
+
