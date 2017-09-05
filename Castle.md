@@ -28,7 +28,7 @@
         Component.For<IService>().ImplementedBy<OtherService>(),
         //IsDefault() 方法指定默认实现实例
         Component.For<IService>().ImplementedBy<ThreeService>().IsDefault(),
-    )
+    );
 ```
 
 3. 注册泛型服务,需要用到For(typeof(IInterface<>))
@@ -149,32 +149,175 @@
 
 ## 通过 `Classes` 或者 `Types` 注册 `Assembly`
 
-### `Classes`注册程序集(只需要三部)
+### `Classes`注册程序集(只需要三步)
 
 * 扫描当前程序集 `Classes.FromThisAssembly()`
-* 设置服务  `WithService.DefaultInterfaces()`
-* 实例生命周期 `LifesyleTransient()`
+* 注入服务  `WithService.DefaultInterfaces()`
+* 设置生命周期 `LifesyleTransient()`
 
 ```
     container.Register(
         Classes.FromThisAssembly()
             .WithService.DefaultInterfaces()
             .LifesyleTransient()
-    )
+    );
 ```
 ### 程序集的过滤
 
-* BaseOn<>() (可以多重过滤)
+* BaseOn,Where,Pick (可以多重过滤) 
 
 ```
     //在当前程序集中只选择集成自 `IController` 接口的类,
     container.Register(
         Classes.FromThisAssembly()
         .BaseOn<IController>()
-        .BaseOn<IService>()
+        .Where(Component.IsInNamespace("Acme.Crm.MessagerDTOS"))
+    );
+```
+
+### 为组件选择服务
+
+1. `WithService.Base()`
+
+```
+    container.Register(
+        Classes.FromThisAssembly()
+        .BaseOn<IController>()
+        .WithService.Base()
     )
 ```
 
-### 实现服务
+2. `WithService.DefaultInterfaces()`
 
-1. WithServie.Base()
+这个方法执行匹配是依据类型名称和接口的名称.
+
+```
+    container.Register(
+        Classes.FromThisAssembly()
+        .InNamespace("Acme.Crm.Services)
+        .WithService.DefaultInterfaces()
+    );
+```
+
+3. `FromInterface()`
+
+另一个非常常见的场景是能够注册共享公共接口的所有类型，但它们之间没有关系。
+
+```
+    public interface IService   {}
+
+    public interface ICalculatorService:IService{}
+
+    public class CalculatorService:ICalculatorService{
+
+    }
+
+
+    //1：普通注册
+    container.Register(
+        Component.For<ICalculatorService>()
+        .ImplementedBy<CalculatorService>()
+    )
+    //2: FromInterface()
+    container.Register(
+        Classes.FromThisAssembly()
+        .BaseOn<IService>()
+        .WithService.FromInterface()
+    );
+```
+
+4. `AllInterfaces()`
+
+解决多接口的问题,当一个实现实现了多个接口,你想每个接口都注册实例的化,用这个方法
+
+5. `Self()`
+
+注册组件将明确类型作为服务使用`WithService.Self()`
+
+```
+    //1. 普通祖册
+    container.Register(
+        Component.For<Foo>()
+        .ImplementedBy<Foo>()
+    );
+
+    //2 等价于
+    container.Register(
+        Classes.FromThisAssembly()
+        .WithService.Self()
+    );
+```
+
+6. `Select()`
+
+如果上面没有一项满足你,那么你可以提供自己的子的委托实现逻辑,通过`WithService.Select()`
+
+```
+    //1:
+    container.Register(
+        Classes.FromThisAssembly()
+            .BasedOn<IFoo>()
+            .WithService.Self()
+            .WithService.Base()
+    );
+    //2:
+    Component.For<IFoo, FooImpl>().ImplementedBy<FooImpl>();
+```
+7. 注册非公共类型
+
+默认的,容易只会注册可见的类型和服务,如果你想注册包含非公共类型,你需要首先指定程序集后接着使用`IncludeNonpublicTypes`
+
+```
+    container.Register(
+        Classes.FromThisAssemby()
+            .IncludeNoPublicTypes()
+            .BaseOn<NoPublicComponent>()
+    );
+```
+
+8. `Configure`
+
+```
+    container.Register(
+        Classes.FromAssembly(Assembly.GetExecutingAssembly())
+            .BasedOn<ICommon>()
+            .LifestyleTransient()
+            .Configure(component => component.Named(component.Implementation.FullName + "XYZ"))
+    );
+```
+9. `ConfigureFor<T>`
+
+```
+    container.Register(
+        Classes.FromThisAssembly()
+            .BasedOn<ICommon>()
+            .LifestyleTransient()
+            .Configure(
+                component => component.Named(component.Implementation.FullName + "XYZ")
+            )
+            .ConfigureFor<CommonImpl1>(
+                component => component.DependsOn(Property.ForKey("key1").Eq(1))
+            )
+            .ConfigureFor<CommonImpl2>(
+                component => component.DependsOn(Property.ForKey("key2").Eq(2))
+            )
+    );
+```
+
+
+10 `ConfigureIf`
+
+```
+    container.Register(
+        Classes.FromThisAssembly()
+            .BasedOn<ICommon>()
+            .LifestyleTransient()
+            .Configure(
+                component => component.Named(component.Implementation.FullName + "XYZ")
+            )
+            .ConfigureIf(
+                x => x.Implementation.Name.StarsWith("Common"),
+                component => component.DependsOn(Property.ForKey("key1").Eq(1))
+            )
+    );
+```
